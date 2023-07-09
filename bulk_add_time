@@ -1,0 +1,67 @@
+import pymysql
+import yaml
+with open('config.yml', 'r') as file:
+    config_data = yaml.safe_load(file)
+# 连接到数据库
+conn = pymysql.connect(
+    host=config_data['ip'],
+    port=config_data['port'],
+    user=config_data['user'],
+    password=config_data['password'],
+    database=config_data['database']
+)
+
+# 检查连接是否成功
+if conn is not None:
+    print("连接成功！")
+    # 创建游标对象
+    cursor = conn.cursor()
+    try:
+        # 查询v2_plan表中的ID和name字段列
+        plan_query = "SELECT id, name FROM v2_plan"
+        cursor.execute(plan_query)
+        plans = cursor.fetchall()
+
+        # 打印套餐ID和name
+        for plan in plans:
+            plan_id = plan[0]
+            plan_name = plan[1]
+            print(f"套餐ID: {plan_id}, 套餐名: {plan_name}")
+
+        while True:
+            # 让用户输入要修改的套餐ID
+            plan_id = input("请输入要修改的套餐ID（输入0返回上一步）：")
+            if plan_id == "0":
+                break
+
+            # 查询v2_user表中符合条件且未过期的记录数量
+            active_count_query = f"SELECT COUNT(*) FROM v2_user WHERE plan_id = {plan_id} AND expired_at > UNIX_TIMESTAMP()"
+            cursor.execute(active_count_query)
+            active_count_result = cursor.fetchone()
+            active_user_count = active_count_result[0]
+            print(f"符合条件且未过期的用户数量为: {active_user_count}")
+
+            # 查询v2_user表中符合条件且已过期的记录数量
+            expired_count_query = f"SELECT COUNT(*) FROM v2_user WHERE plan_id = {plan_id} AND expired_at <= UNIX_TIMESTAMP()"
+            cursor.execute(expired_count_query)
+            expired_count_result = cursor.fetchone()
+            expired_user_count = expired_count_result[0]
+            print(f"符合条件且已过期的用户数量为: {expired_user_count}")
+
+            # 让用户输入要增加的天数
+            days = int(input("请输入要增加的天数："))
+
+            # 更新v2_user表中符合条件的记录的过期时间
+            update_query = f"UPDATE v2_user SET expired_at = expired_at + {days * 86400} WHERE plan_id = {plan_id} AND expired_at > UNIX_TIMESTAMP()"
+            cursor.execute(update_query)
+            conn.commit()
+            print(f"已成功给符合条件的用户增加 {days} 天时间")
+
+    except pymysql.Error as e:
+        print(f"操作出错: {e}")
+    finally:
+        # 关闭游标对象和连接
+        cursor.close()
+        conn.close()
+else:
+    print("连接失败！")
